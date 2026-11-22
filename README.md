@@ -1,160 +1,112 @@
-# llama.cpp
+# ATLAS 3DSS // Atlas Engine (v7)
 
-> [!NOTE]
-> **This fork: faster Inkling 2 on CUDA.** Branch `inkling2-speed` is upstream master plus four commits that make
-> Inkling 2 Mini run faster on NVIDIA GPUs: the depth states are normalized once per block, and the model's small glue
-> op chains run as fused CUDA kernels (`ggml/src/ggml-cuda/inkling2.cu`). Build it the usual way (`-DGGML_CUDA=ON`);
-> nothing needs to be enabled at runtime, and other models are unaffected.
->
-> ![Inkling 2 Mini, upstream vs fork, RTX 5060 Ti](media/inkling2-speed-5060ti.png)
->
-> RTX 5060 Ti 16 GB, Inkling-2-Mini-UD-IQ1_S, `llama-bench -fa 1 -ngl 99`, f16 KV, tokens/s:
->
-> | context depth | prefill (pp512) upstream | prefill fork | decode (tg128) upstream | decode fork |
-> |---:|---:|---:|---:|---:|
-> | 0 | 1097 | 2193 (2.0x) | 64.5 | 88.8 (+38%) |
-> | 4K | 725 | 1903 (2.6x) | 60.6 | 84.2 (+39%) |
-> | 8K | 626 | 1783 (2.8x) | 59.5 | 81.8 (+38%) |
-> | 16K | 494 | 1595 (3.2x) | 56.0 | 77.4 (+38%) |
-> | 32K | 349 | 1320 (3.8x) | 50.6 | 69.5 (+37%) |
-> | 48K | 270 | 1108 (4.1x) | 46.4 | 63.6 (+37%) |
-> | 64K (`-ub 256`) | 222 | 902 (4.1x) | 42.9 | 58.8 (+37%) |
->
-> ![Inkling 2 Mini, upstream vs fork, Tesla V100](media/inkling2-speed-v100.png)
->
-> Tesla V100 32 GB, Inkling-2-Mini-UD-Q4_K_XL, `llama-bench -fa 1 -ngl 99`, f16 KV, tokens/s:
->
-> | context depth | prefill (pp512) upstream | prefill fork | decode (tg128) upstream | decode fork |
-> |---:|---:|---:|---:|---:|
-> | 0 | 725 | 1185 (1.6x) | 32.0 | 50.7 (+59%) |
-> | 4K | 500 | 1093 (2.2x) | 31.2 | 49.6 (+59%) |
-> | 8K | 436 | 1044 (2.4x) | 30.8 | 49.0 (+59%) |
-> | 16K | 349 | 943 (2.7x) | 30.0 | 47.9 (+60%) |
-> | 32K | 250 | 825 (3.3x) | 28.5 | 45.7 (+60%) |
-> | 48K | 194 | 725 (3.7x) | 27.2 | 43.8 (+61%) |
-> | 64K | 158 | 651 (4.1x) | 25.6 | 41.4 (+62%) |
-> | 96K | 116 | 533 (4.6x) | 23.1 | 38.5 (+67%) |
-> | 128K (`-ub 256`) | 94 | 467 (4.9x) | 21.1 | 35.4 (+68%) |
->
-> At the largest depth on each card, the default `-ub 512` runs out of memory for both builds, so that row uses `-ub 256`.
->
-> Output quality matches upstream. On the RTX 5060 Ti most fused kernels reproduce the unfused results bit for bit; on
-> the V100 they differ in the last bits. Perplexity KLD against upstream, next to the KLD between two upstream runs at
-> different batch sizes: 5060 Ti decode 0.0018 vs 0.0027, prefill 0.0022 vs 0.0031; V100 decode 0.0025 vs 0.0022 (within
-> the measurement error), prefill 0.0016 vs 0.0017. `test-backend-ops -o INKLING2_*` covers each fused chain.
->
-> **AMD (user report from [@m_check1B](https://x.com/m_check1B/status/2124237027847938484), not run by us).** The fused
-> kernels also build for AMD GPUs: the HIP backend
-> (`-DGGML_HIP=ON`) compiles the same CUDA sources, so no changes were needed. Radeon AI PRO R9700, Inkling-2-Mini
-> Q8_0, upstream and fork run back to back with identical settings, tokens/s:
->
-> | context depth | prefill upstream | prefill fork | decode upstream | decode fork |
-> |---:|---:|---:|---:|---:|
-> | 0 | 1567 | 2378 (+52%) | 32.2 | 48.9 (+52%) |
-> | 8K | 685 | 1769 (2.6x) | - | - |
-> | 32K | 344 | 1190 (3.5x) | 30.2 | 47.4 (+57%) |
->
-> They report that all 20,882 `test-backend-ops` cases pass, including the `INKLING2_*` ones, and that spot-check
-> prompts came back correct.
+> **More Precise · More Concise · Faster**
+> Open MIT CUDA inference engine for **Inkling-2-Mini** (built on [`llama.cpp`](docs/UPSTREAM_LLAMA_CPP_README.md) & `realugbun/llama.cpp:inkling2-speed`) paired with **Mixture-of-Engrams** host-verified continual memory.
 
-![llama.cpp](https://raw.githubusercontent.com/ggml-org/llama-brand/refs/heads/master/logo/svg/cover/llama-cpp/cover-llama-cpp-dark.svg)
+![Atlas Engine v7 — More Precise, More Concise, Faster](docs/media/atlas_engine_v7_brand_hero.png)
 
-<div align="center">
+---
 
-<b>LLM inference in C/C++</b>
+## Why Atlas Engine
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Release](https://img.shields.io/github/v/release/ggml-org/llama.cpp?color=brightgreen)](https://github.com/ggml-org/llama.cpp/releases?q=tag:v1)
-[![Nightly](https://img.shields.io/github/v/release/ggml-org/llama.cpp?label=nightly&filter=b*&color=orange)](https://github.com/ggml-org/llama.cpp/releases?q=b)
-[![Server](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/server.yml?label=Server)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
-[![Docker](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/docker.yml?label=Docker)](https://github.com/ggml-org/llama.cpp/actions/workflows/docker.yml)
-[![Winget](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/winget.yml?label=Winget)](https://github.com/ggml-org/llama.cpp/actions/workflows/winget.yml)
+Raw throughput without precision or conciseness breaks down on real long-context and multi-turn workloads (wrong answers at 196K, subtle accumulation drift on diffuse attention heads, and bloated multi-million-token prompt bills). Atlas Engine combines five clean, upstream-submitted CUDA/server improvements with a host-verified continual memory architecture:
 
-[v1.0.0](https://huggingface.co/blog/ggml-org/llama-cpp-v1) / [ggml](https://github.com/ggml-org/ggml) / [ops](https://github.com/ggml-org/llama.cpp/blob/master/docs/ops.md) / [maintainer PRs](https://github.com/ggml-org/llama.cpp/pulls?q=is%3Apr%20is%3Aopen%20draft%3AFalse%20(author%3Asanmai%20OR%20author%3Argerganov%20OR%20author%3AKitaitiMakoto%20OR%20author%3Adanbev%20OR%20author%3Aaldehir%20OR%20author%3Amax-krasnyansky%20OR%20author%3ACISC%20OR%20author%3Aggerganov%20OR%20author%3Aam17an%20OR%20author%3Ajhen0409%20OR%20author%3Abartowski1182%20OR%20author%3Anikwen%20OR%20author%3Ahipudding%20OR%20author%3Aravi9%20OR%20author%3AServeurpersoCom%20OR%20author%3Athelittlefireman%20OR%20author%3Apwilkin%20OR%20author%3Areeselevine%20OR%20author%3Angxson%20OR%20author%3Ajeffbolznv%20OR%20author%3Amarty1885%20OR%20author%3A0cc4m%20OR%20author%3ATitaniumtown%20OR%20author%3Aangt%20OR%20author%3AIMbackK%20OR%20author%3Aarthw%20OR%20author%3AJohannesGaessler%20OR%20author%3AORippler%20OR%20author%3Aruixiang63%20OR%20author%3Axctan%20OR%20author%3AmasterFoad%20OR%20author%3Aallozaur%20OR%20author%3AAndreas-Krebbel%20OR%20author%3Ayomaytk%20OR%20author%3Aaendk%20OR%20author%3Awine99%20OR%20author%3Agaugarg-nv%20OR%20author%3Ataronaeo%20OR%20author%3Aforforever73%20OR%20author%3Achaxu01%20OR%20author%3Alhez%20OR%20author%3AAlekseiNikiforovIBM%20OR%20author%3Anetrunnereve%20OR%20author%3Afairydreaming%20OR%20author%3Aynankani)%20sort%3Aupdated-desc) / [dev stats](https://github.com/ggml-org/llama.cpp-dev) / [lib llama API](https://github.com/ggml-org/llama.cpp/issues/9289) / [llama-server REST API](https://github.com/ggml-org/llama.cpp/issues/9291)
+### Included Engine Features (All Submitted Upstream to `realugbun/llama.cpp`)
+1. **On-the-fly Inkling-2 Relative Bias FlashAttention + Direct FP8/Q8_0 KV + Hybrid SWA/Full KV** ([PR #2](https://github.com/realugbun/llama.cpp/pull/2)):
+   - Computes Inkling-2 relative-position bias on the fly inside MMA FlashAttention (`fattn-mma-f16-rel.cu`) instead of materializing an $O(N^2)$ mask tensor.
+   - Direct `F8_E4M3`, `Q8_0`, and `F16` KV reads, odd-GQA `64×1` prefill dispatch (`gqa_ratio = 3`), `warp_all_far` fast path (bit-identical to the general path: `0.000000` max abs diff across SM86 / SM89 / SM120), explicit `kv_rows`/causal guards, and `ATLAS_HYBRID_SWA_F16=1` (`F16` SWA layers + `F8_E4M3` full-attention layers).
+   - *Architecture note:* Requires NVIDIA Turing or newer (`SM75+`, `turing_mma_available`); falls back cleanly to the legacy path on older architectures (Volta `SM70` work is tracked separately).
+2. **Opt-in FP32 `VKQ_C` Attention Accumulator** ([PR #5](https://github.com/realugbun/llama.cpp/pull/5)):
+   - Runtime toggle `ATLAS_RELBIAS_FP32_ACC=1` (**default OFF**; zero default performance impact) accumulates `P * V` tiles in `float` (`tile<16,16,float>` / `tile<16,8,float>`) instead of `half2`.
+   - Flattens 196K per-layer drift against an IEEE-754 `FP64` oracle from `<1.5%` (`0.37%–1.38%`) down to **`0.027%–0.035%`** (`norm_ratio = 0.99991`) for `1–3%` prefill and `0.07–0.18%` decode cost on RTX 3090. Offered honestly as an inexpensive opt-in precision option, not a fix for a demonstrated end-to-end defect.
+3. **Native Inkling-2 `rnn_hidden` DSpark Speculative Drafting + `f_rnn` Ring Rollback** ([PR #3](https://github.com/realugbun/llama.cpp/pull/3)):
+   - Per-sequence `dspark_f_rnn_dev` ring buffer (`ring_sz = block_size = 8`, anchored at `pos_anchor - 1`) prevents partial speculative draft rejections from corrupting `f_rnn` hidden state across long sequences.
+4. **Per-Request Dynamic `loop_passes` Gearing with Cross-Gear KV Isolation** ([PR #4](https://github.com/realugbun/llama.cpp/pull/4)):
+   - Per-request `"loop_passes"` override (`0` = model default, `1..loop.count`) with slot-level KV isolation and concurrent mixed-gear batch separation.
+5. **Opt-in Automatic Difficulty Router for `loop_passes`** ([PR #6](https://github.com/realugbun/llama.cpp/pull/6)):
+   - Opt-in per request via `"loop_passes": -1` (or server-wide via `ATLAS_LOOP_ROUTER=1`, **default OFF** so stock fixed-3-pass weights are never accidentally degraded).
+   - Routes easy / medium / hard prompts to Gears `1 / 2 / 3` prior to slot launch (preserving full cross-gear KV isolation) and reports `"loop_passes"` + `"loop_router_reason"` in JSON responses.
 
-</div>
+---
 
-## Description
+## Verified 196K Cold 4-Workload Benchmarks (All Full Depth `gear=3`, 3-Run Spreads)
 
-The main goal of `llama.cpp` is to enable LLM (and MLLM) inference with minimal setup and state-of-the-art performance on a wide range of hardware - locally and in the cloud.
+Four cold long-document workloads (`112K–195K` tokens: incident investigation, camera guide, news evidence, knowledge graph — 3 repeats each = 12 runs, plus Workload #5 multi-slot / KV-hole check):
 
-The `llama.cpp` project is built on top of the [ggml](https://github.com/ggml-org/ggml) library.
+| GPU / Configuration | `-ub` | `token_embd` | Exact Answers | Cold Prefill (tok/s) | Decode (tok/s) | Mean Total (s) | Peak VRAM |
+|---|---:|---|---:|---:|---:|---:|---:|
+| **RTX 3090 (SM86, 350W) — Atlas v7 + DSpark (`IQ4_NL`)** | 512 | CPU | **12/12 + W5** | `1,697.3 ± 9.1` | `86.1 ± 1.9` | **`106.31 ± 1.05`** | `22,456 MiB` |
+| **RTX 3090 (SM86, 350W) — Atlas v7 + DSpark (`IQ4_NL`)** | 1024 | CPU | **12/12** | `1,764.6 ± 9.7` | `88.5 ± 2.0` | **`102.83 ± 1.13`** | `23,698 MiB` |
+| **RTX 3090 (SM86, 350W) — Stock Maya v1.1.73 (`UD-Q4_K_XL`, ref)** | — | CPU/ref | 12/12 | `1,631.2 ± 5.9` | `86.8 ± 0.0` | `109.76 ± 0.54` | `21,396 MiB` |
+| **RTX 4090 (SM89, 24 GB) — Atlas v7 + DSpark (`IQ4_NL`)** | 512 | CPU | **12/12 + W5** | `3,253.4 ± 79.3` | `113.3 ± 1.4` | **`57.44 ± 1.31`** | `23,220 MiB` |
+| **RTX PRO 6000 Blackwell (SM120) — Atlas v7 + DSpark (`IQ4_NL`)** | 512 | GPU | **12/12 + W5** | `4,465.3 ± 30.9` | `155.9 ± 3.4` | **`41.97 ± 0.39`** | `24,498 MiB` |
 
-## Quick start
+![Detailed Per-Workload Progression](docs/media/atlas_v7_vs_maya_v5_init.png)
 
-A few options to get `llama.cpp` installed on your machine:
+### Honest Numerical Audit (Validated IEEE-754 `FP64` Oracle, SM86, Non-Repeating Corpus, FP8 KV)
+- **Zero-noise per-layer regression gate:** `V7_GEN == V7_FAST` (`0.000000` max abs diff across SM86, SM89, SM120); localized boundary-tile faults caught at `48–53× SNR` where coarse end-to-end KL alone misses them.
+- **Per-layer drift vs `FP64` at 196K (`n_q=16 | n_q=1`):**
+  - Legacy `mma_f16` (`half2`): `0.708% | 0.907%`
+  - Atlas v7 default (`half2`): `1.377% | 0.374%` *(mixed vs legacy: `2.4×` closer at decode, `1.9×` further at prefill)*
+  - Atlas v7 opt-in **`ATLAS_RELBIAS_FP32_ACC=1`**: **`0.0274% | 0.0346%`** (`norm_ratio = 0.99991`)
+- **End-to-end 64K unseen high-entropy prose (`PPL ~19.2`, 256 tokens):** All differences `<1σ` against the `~0.010–0.015` routing/path KL floor (196K end-to-end unmeasured; no measurable output damage demonstrated at 64K).
+
+### Dynamic `loop_passes` Gearing & Auto-Router
+- **Variable-loop weights (`varloop-Q4_0`, RTX 4090 SM89, `-c 4096`, no DSpark — paired speed & quality):**
+  - Gear 3 (default): `106.9 tok/s`, `PPL 2.4627 ± 0.0708`
+  - Gear 2: **`141.0 tok/s` (`1.32×`)**, `+2.9%` PPL (`Same top-1: 94.06%`)
+  - Gear 1: **`200.0 tok/s` (`1.87×`)**, `+7.0%` PPL (`Same top-1: 90.38%`)
+- **Live auto-router verification (`varloop-Q4_0`, RTX 3090 SM86, `--parallel 3`, `loop_passes: -1`):**
+  - Gear 1 (`easy:short_direct`): `110.11 tok/s` (`2.20×`), Gear 2 (`medium:*`): `72.10 tok/s` (`1.44×`), Gear 3 (`hard:*`): `49.94 tok/s`, plus concurrent 3-way mixed-gear batch (`1 / 2 / 3` simultaneously).
+- **Important caveat:** Stock fixed-3-pass `Inkling-2-Mini` weights degrade sharply at Gear 1/2 (`2.3×–2.4×` PPL). Downshifting is strictly opt-in and intended for variable-loop trained weights.
+
+---
+
+## Mixture-of-Engrams Continual Memory (`engram/`)
+
+`engram/reference_moe_engram.py` contains our reference 4-bank Mixture-of-Engrams architecture (`ours_engram_moe` — host-verified ATMS schema/JOIN/value lane + lazy drift invalidation + compact turn-based memory):
+- **CL-Bench `database_exploration` dev split (`Inkling-2-Mini-Q8_0`, 5 runs / 200 instances, same-host paired vs 10-run pooled 14k ICL `0.3915`):**
+  - Score: **`0.4213 ± 0.0920`** (`54.0%` accuracy, non-inferior; `pre 0.410 -> post 0.433`, zero post-migration collapse)
+  - Prompt tokens per run: **`1.095M` vs `3.179M` (`-65.5%`)**, exploratory queries `-18.6%`
+  - Causal ablations on the same host isolated **verbatim concrete execution results** as a primary causal driver (`rows_redacted`: `Δ = -0.0938, p = 0.0006`; `errors_removed`: `Δ = +0.0138, p = 0.462`, null).
+- *Scope status:* Dev-split results above; an independent blind-authored 40-question confirmatory run (`N = 10` runs/arm, dual-family Gemini + OpenAI Codex ambiguity audit `0/40` genuine ambiguities, frozen hashes) is in progress.
+
+---
+
+## Quick Build & Run (NVIDIA SM75+ / Turing, Ampere, Ada, Blackwell)
 
 ```bash
-# curl
-curl -LsSf https://llama.app/install.sh | sh
-
-# powershell
-irm https://llama.app/install.ps1 | iex
+cmake -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON \
+  -DCMAKE_CUDA_ARCHITECTURES="86;89;120" \
+  -DGGML_CUDA_FA_ALL_QUANTS=ON
+cmake --build build --target llama-server llama-bench llama-perplexity -j
 ```
 
-- Visit https://llama.app and follow the instructions
-- Run with Docker - see our [Docker documentation](docs/docker.md)
-- Download pre-built binaries from the [releases page](https://github.com/ggml-org/llama.cpp/releases)
-- Build from source by cloning this repository - check out [our build guide](docs/build.md)
+### Serve Inkling-2-Mini (196K Context, Hybrid FP16-SWA / FP8-Full KV + DSpark)
+```bash
+export ATLAS_HYBRID_SWA_F16=1
+# Optional high-precision long-context attention accumulator (default OFF):
+# export ATLAS_RELBIAS_FP32_ACC=1
+# Optional server-wide automatic loop_passes router (for variable-loop weights only, default OFF):
+# export ATLAS_LOOP_ROUTER=1
 
-Once installed:
-
-```sh
-# Download and run a model directly from Hugging Face
-llama cli -hf ggml-org/Qwen3.5-0.8B-GGUF
-
-# Launch OpenAI-compatible API server
-llama serve -hf ggml-org/Qwen3.5-0.8B-GGUF
+./build/bin/llama-server \
+  -m Inkling-2-Mini-IQ4_NL.gguf \
+  -md dspark-Inkling-2-Mini-Q8_0.gguf -ngld 999 \
+  -ngl 999 -fa on \
+  -ot "token_embd.weight=CPU" \
+  -ctk f8_e4m3 -ctv f8_e4m3 \
+  -b 2048 -ub 512 \
+  -c 196608 --parallel 1 \
+  --host 127.0.0.1 --port 8080
 ```
+*(Omit `-ot "token_embd.weight=CPU"` on 32+ GB cards to keep token embeddings on GPU.)*
 
-<table align="center">
-    <tr>
-        <td align="center" width=50%>
-            <img width="1310" height="888" alt="VLM session with `llama cli`" src="https://github.com/user-attachments/assets/88726b48-1713-48aa-a525-95a02e78afc4" />
-            <i>VLM session with <b>llama cli</b></i>
-        </td>
-        <td align="center">
-            <img width="1392" height="958" alt="Llama Chat, the built-in chat app, against `llama serve` running Qwen 3.6" src="https://github.com/user-attachments/assets/b402f972-2e32-4def-8771-8d849f08cf2e" />
-            <i>Llama Chat, the built-in chat app, against <b>llama serve</b></i>
-        </td>
-    </tr>
-<table>
+---
 
-## Documentation
-
-#### Tools
-
-- [cli](tools/cli/README.md)
-- [completion](tools/completion/README.md)
-- [server](tools/server/README.md)
-- [Text-to-speech (TTS) models](docs/multimodal/tts.md)
-- [GBNF grammars](grammars/README.md)
-
-#### Development
-
-- [How to build](docs/build.md)
-- [Running on Docker](docs/docker.md)
-- [Build on Android](docs/android.md)
-- [Multi-GPU usage](docs/multi-gpu.md)
-- [Performance troubleshooting](docs/development/token_generation_performance_tips.md)
-- [GGML tips & tricks](https://github.com/ggml-org/llama.cpp/wiki/GGML-Tips-&-Tricks)
-- [XCFramework](docs/xcframework.md)
-- [Completions](docs/completions.md)
-- [Models](docs/models.md)
-- [Release process](docs/release.md)
-
-## Contributing
-
-- Contributors can open PRs
-- Collaborators will be invited based on contributions
-- Maintainers can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
-- Any help with managing issues, PRs and projects is very appreciated!
-- Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
-
-## Acknowledgements
-
-- [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) - Single-header HTTP server, used by `llama-server` - MIT license
-- [nothings/stb](https://github.com/nothings/stb) - Single-header image format decoder, used by multimodal subsystem - Public domain
-- [nlohmann/json](https://github.com/nlohmann/json) - Single-header JSON library, used by various tools/examples - MIT License
-- [mackron/miniaudio](https://github.com/mackron/miniaudio) - Single-header audio format decoder, used by multimodal subsystem - Public domain
-- [sheredom/subprocess.h](https://github.com/sheredom/subprocess.h) - Single-header process launching solution for C and C++ - Public domain
+## License & Acknowledgments
+- **License:** MIT (preserving upstream `llama.cpp` [LICENSE](LICENSE)).
+- Built on [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp) and [`realugbun/llama.cpp`](https://github.com/realugbun/llama.cpp) (`inkling2-speed`).
+- Inkling-2-Mini weights and architecture by Thinking Machines Lab; reference benchmark comparison against `project-maya` (`Maya v1.1.73`, Apache 2.0, benchmarked externally — no Maya kernel code copied).
