@@ -1,4 +1,4 @@
-"""Ours, not upstream: Deterministic 4-Bank Mixture of Engrams (MoE-Engram) with Optimal-Trace Distillation.
+"""Reference implementation: Deterministic 4-Bank Verified Ledger with Optimal-Trace Distillation.
 
 Specialist Host-Verified Banks (all backed by ATMS SQLite ledger with drift invalidation):
   1. BANK_SCHEMA_JOINS: Active ATMS schema + verified JOIN edge graph + verbatim column value-format samples.
