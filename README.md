@@ -1,6 +1,8 @@
 # Atlas Engine
 
-MIT-licensed CUDA inference engine for **Inkling-2-Mini** (built on [`llama.cpp`](docs/UPSTREAM_LLAMA_CPP_README.md) and [`realugbun/llama.cpp:inkling2-speed`](https://github.com/realugbun/llama.cpp)), with a reference **verified ledger** continual-memory implementation in [`ledger/verified_ledger.py`](ledger/verified_ledger.py).
+> **Primary engine:** For Ampere (RTX 3090 `sm_86`), Ada (RTX 4090 `sm_89`), and Blackwell (`sm_120a`), our primary Inkling-2-Mini engine is now **[Atlas3DSS/atlas-ingine](https://github.com/Atlas3DSS/atlas-ingine)** (Apache-2.0 fork of `satellitedown/ingine`: up to `213 tok/s` on 3090, `278 tok/s` on 4090, `554 tok/s` on Blackwell, native vision, Elastic `ATLAS2`/`ATLAS3` MoE, and OpenAI JSON mode). Use this repository (`Atlas3DSS/atlas-engine`) for MIT `llama.cpp` / GGUF serving or SM75+ GPUs.
+
+MIT-licensed CUDA inference engine for **Inkling-2-Mini** (built on [`llama.cpp`](docs/UPSTREAM_LLAMA_CPP_README.md) and [`realugbun/llama.cpp:inkling2-speed`](https://github.com/realugbun/llama.cpp)), with a standalone **verified ledger** continual-memory library and guide in [`ledger/`](ledger/README.md).
 
 ## Changes over upstream
 
@@ -41,7 +43,7 @@ On variable-loop weights (`varloop-Q4_0`, RTX 4090, `-c 4096`, no DSpark):
 
 ## Verified ledger and elastic GGUFs
 
-[`ledger/verified_ledger.py`](ledger/verified_ledger.py) is a host-verified 4-bank continual-memory ledger (schema/JOINs, verified traces, error repairs, and schema-drift migration with drift invalidation).
+[`ledger/`](ledger/README.md) provides a zero-dependency standalone SQLite **Verified Ledger** ([`ledger/verified_ledger.py`](ledger/verified_ledger.py)) with a guide and runnable example for building and updating your own domain ledgers (host-verified facts, winners, error-repair rules, and drift invalidation) against either `atlas-ingine` or `atlas-engine`.
 
 Loop-tiered BF16-sourced GGUFs (`7.90-12.60 GiB`) and full eval JSONs are on Hugging Face: [`Atlas3D/Inkling-2-Mini-Atlas-Elastic-GGUF`](https://huggingface.co/Atlas3D/Inkling-2-Mini-Atlas-Elastic-GGUF).
 
