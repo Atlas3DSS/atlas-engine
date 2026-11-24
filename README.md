@@ -22,7 +22,6 @@ Four cold long-document prompts (`112K-195K` tokens, 3 repeats each = 12 runs, f
 |---|---:|---|---:|---:|---:|---:|---:|
 | RTX 3090 (SM86) — Atlas Engine + DSpark (`IQ4_NL`) | 512 | CPU | 12/12 + W5 | `1,697.3 ± 9.1` | `86.1 ± 1.9` | `106.31 ± 1.05` | `22,456 MiB` |
 | RTX 3090 (SM86) — Atlas Engine + DSpark (`IQ4_NL`) | 1024 | CPU | 12/12 | `1,764.6 ± 9.7` | `88.5 ± 2.0` | `102.83 ± 1.13` | `23,698 MiB` |
-| RTX 3090 (SM86) — Maya v1.1.73 (`UD-Q4_K_XL`, ref) | — | CPU | 12/12 | `1,631.2 ± 5.9` | `86.8 ± 0.0` | `109.76 ± 0.54` | `21,396 MiB` |
 | RTX 4090 (SM89) — Atlas Engine + DSpark (`IQ4_NL`) | 512 | CPU | 12/12 + W5 | `3,253.4 ± 79.3` | `113.3 ± 1.4` | `57.44 ± 1.31` | `23,220 MiB` |
 | RTX PRO 6000 Blackwell (SM120) — Atlas Engine + DSpark (`IQ4_NL`) | 512 | GPU | 12/12 + W5 | `4,465.3 ± 30.9` | `155.9 ± 3.4` | `41.97 ± 0.39` | `24,498 MiB` |
 
